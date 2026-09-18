@@ -1,1 +1,66 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Nala's Fishing Game</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#06243c;font-family:Trebuchet MS,Segoe UI,system-ui,sans-serif;touch-action:none;user-select:none}
+canvas{display:block;width:100vw;height:100vh}
+#hud{position:fixed;inset:0;pointer-events:none;color:#f4fbff;text-shadow:0 2px 8px rgba(0,20,40,.7);padding:calc(12px + env(safe-area-inset-top)) 16px 16px}
+#topbar{display:flex;justify-content:space-between}
+#scoreBox,#lives{font-weight:700;font-size:20px;background:rgba(4,18,32,.55);border:1px solid rgba(180,230,255,.22);padding:6px 12px;border-radius:999px}
+#combo{position:absolute;top:calc(52px + env(safe-area-inset-top));right:16px;color:#ffe28a;opacity:0}
+#combo.on{opacity:1}
+#overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(3,12,24,.82);color:#f7fbff;text-align:center;padding:24px}
+#overlay.hidden{display:none}
+#card{max-width:420px;width:92vw;background:rgba(8,28,48,.78);border:1px solid rgba(180,230,255,.28);border-radius:24px;padding:28px 22px}
+#nalaTitleImg{width:108px;height:108px;border-radius:50%;object-fit:cover;margin:0 auto 10px;display:block}
+button{pointer-events:auto;border:0;background:linear-gradient(180deg,#ffd56a,#f0a52a);color:#2a1a00;font-weight:800;font-size:18px;padding:14px 28px;border-radius:999px}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="hud"><div id="topbar"><div id="scoreBox"><span>SCORE </span><strong id="scoreVal">0</strong></div><div id="lives"></div></div><div id="combo">COMBO x1</div></div>
+<div id="overlay"><div id="card"><img id="nalaTitleImg" alt="Nala" src=""><h1 id="ovTitle">Nala's Fishing Game</h1><p id="ovSub">Tap the swimming Nala-fish before they slip off the screen.</p><div id="ovStats"></div><button id="startBtn">Cast the line</button></div></div>
+<script>
+const NALA_SRC="https://raw.githubusercontent.com/mikelz15/nalas-fishing-game/98eb385837db582b26a84305f78881d0593008cd/nala-face.png";
+const canvas=document.getElementById("gameCanvas");
+const ctx=canvas.getContext("2d");
+const overlay=document.getElementById("overlay");
+const ovTitle=document.getElementById("ovTitle");
+const ovSub=document.getElementById("ovSub");
+const ovStats=document.getElementById("ovStats");
+const startBtn=document.getElementById("startBtn");
+const scoreVal=document.getElementById("scoreVal");
+const livesEl=document.getElementById("lives");
+const comboEl=document.getElementById("combo");
+document.getElementById("nalaTitleImg").src=NALA_SRC;
+const catFaceImg=new Image();catFaceImg.src=NALA_SRC;
+const MAX_LIVES=5,HS_KEY="nalaFishingHighScore";
+let W=0,H=0,dpr=1,state="menu",fishList=[],fx=[],bubbles=[],weeds=[],score=0,lives=MAX_LIVES,combo=0,lastCatch=0,spawnAcc=0,spawnEvery=900,elapsed=0,lastTs=0,shake=0,audioCtx=null;
+function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=Math.floor(W*dpr);canvas.height=Math.floor(H*dpr);canvas.style.width=W+"px";canvas.style.height=H+"px";ctx.setTransform(dpr,0,0,dpr,0,0);if(!weeds.length)seedDecor()}
+addEventListener("resize",resize);resize();
+function seedDecor(){weeds=[];for(let i=0;i<9;i++)weeds.push({x:(i+.3)*(W/9)+Math.random()*20,h:70+Math.random()*110,phase:Math.random()*6.28,w:8+Math.random()*10});bubbles=[];for(let i=0;i<22;i++)bubbles.push({x:Math.random()*W,y:Math.random()*H,r:1.5+Math.random()*4,s:12+Math.random()*28,a:.12+Math.random()*.2})}
+function ensureAudio(){if(audioCtx)return;const AC=window.AudioContext||window.webkitAudioContext;if(AC)audioCtx=new AC()}
+function beep(freq,dur,type,vol){if(!audioCtx)return;const t=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type||"sine";o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(vol||.08,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+dur)}
+class Fish{constructor(){const d=Math.min(elapsed/75000,1);this.golden=Math.random()<.08;this.size=this.golden?82:42+Math.random()*36;this.x=Math.random()*Math.max(20,W-this.size);this.y=-this.size-10;this.speedX=(Math.random()-.5)*(2.2+d*3.2);this.speedY=(1.35+Math.random()*1.15)*(1+d*1.35);if(this.golden)this.speedY*=1.18;this.wobble=Math.random()*6.28;this.flip=this.speedX>=0?1:-1;this.hue=this.golden?45:180+Math.random()*80}update(dt){this.wobble+=dt*4;this.y+=this.speedY*dt*60;this.x+=(this.speedX+Math.sin(this.wobble)*.8)*dt*60;if(this.x<4){this.x=4;this.speedX=Math.abs(this.speedX);this.flip=1}if(this.x+this.size>W-4){this.x=W-4-this.size;this.speedX=-Math.abs(this.speedX);this.flip=-1}}draw(){const cx=this.x+this.size/2,cy=this.y+this.size/2;ctx.save();ctx.translate(cx,cy);ctx.rotate(Math.sin(this.wobble)*.12);ctx.scale(this.flip,1);ctx.fillStyle=this.golden?"rgba(255,210,70,.95)":`hsla(${this.hue},70%,55%,.95)`;ctx.beginPath();ctx.moveTo(-this.size*.42,0);ctx.quadraticCurveTo(-this.size*.82,-this.size*.28,-this.size*.78,0);ctx.quadraticCurveTo(-this.size*.82,this.size*.28,-this.size*.42,0);ctx.fill();if(this.golden){ctx.shadowColor="rgba(255,210,60,.85)";ctx.shadowBlur=18}ctx.beginPath();ctx.ellipse(this.size*.02,0,this.size*.42,this.size*.32,0,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;const face=this.size*.72;if(catFaceImg.complete&&catFaceImg.naturalWidth){ctx.save();ctx.beginPath();ctx.arc(this.size*.08,0,face/2,0,Math.PI*2);ctx.clip();ctx.drawImage(catFaceImg,this.size*.08-face/2,-face/2,face,face);ctx.restore()}else{ctx.fillStyle="#c4a574";ctx.beginPath();ctx.arc(this.size*.08,0,face/2,0,Math.PI*2);ctx.fill();ctx.fillStyle="#3b2a1a";ctx.beginPath();ctx.arc(this.size*.02,-face*.12,face*.08,0,Math.PI*2);ctx.arc(this.size*.16,-face*.12,face*.08,0,Math.PI*2);ctx.fill()}ctx.restore()}contains(px,py){return Math.hypot(px-(this.x+this.size/2),py-(this.y+this.size/2))<this.size*.55+22}}
+function spawnFish(){if(fishList.length<8+Math.floor(Math.min(elapsed/20000,8)))fishList.push(new Fish())}
+function addSplash(x,y,g){for(let i=0;i<12;i++){const a=Math.random()*6.28,sp=40+Math.random()*120;fx.push({kind:"p",x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-40,life:1,r:2+Math.random()*3,color:g?"#ffe28a":"#b7ecff"})}}
+function addFloater(x,y,text,color){fx.push({kind:"t",x,y,vy:-42,life:1,text,color})}
+function pointerPos(e){const r=canvas.getBoundingClientRect(),s=e.touches&&e.touches[0]?e.touches[0]:e;return{x:s.clientX-r.left,y:s.clientY-r.top}}
+function tryCatch(e){if(e.cancelable)e.preventDefault();if(state!=="play")return;const{x,y}=pointerPos(e);let hit=false;for(let i=fishList.length-1;i>=0;i--){const f=fishList[i];if(f.contains(x,y)){hit=true;const now=performance.now();combo=(now-lastCatch<1400)?combo+1:1;lastCatch=now;const g=(f.golden?50:10)*combo;score+=g;addSplash(f.x+f.size/2,f.y+f.size/2,f.golden);addFloater(f.x+f.size/2,f.y,(f.golden?"GOLD +":"+")+g,f.golden?"#ffe28a":"#fff");fishList.splice(i,1);shake=f.golden?10:5;beep(f.golden?740:520+combo*40,.1,"sine",.07);break}}if(!hit)fx.push({kind:"r",x,y,life:1,r:8});updateHud()}
+canvas.addEventListener("touchstart",tryCatch,{passive:false});canvas.addEventListener("mousedown",tryCatch);
+function updateHud(){scoreVal.textContent=score;livesEl.textContent="\uD83D\uDC3E".repeat(lives)+"\u00B7".repeat(Math.max(0,MAX_LIVES-lives));if(combo>=2&&state==="play"){comboEl.textContent="COMBO x"+combo;comboEl.classList.add("on")}else comboEl.classList.remove("on")}
+function startGame(){ensureAudio();if(audioCtx&&audioCtx.state==="suspended")audioCtx.resume();state="play";overlay.classList.add("hidden");fishList=[];fx=[];score=0;lives=MAX_LIVES;combo=0;lastCatch=0;spawnAcc=0;spawnEvery=1100;elapsed=0;lastTs=0;spawnFish();spawnFish();updateHud()}
+function gameOver(){state="over";const best=Math.max(Number(localStorage.getItem(HS_KEY)||0),score);localStorage.setItem(HS_KEY,String(best));ovTitle.textContent="Pond's closed";ovSub.textContent="Nala is proud.";ovStats.innerHTML="Score <strong>"+score+"</strong> \u00B7 Best <strong>"+best+"</strong>";startBtn.textContent="Fish again";overlay.classList.remove("hidden")}
+startBtn.addEventListener("click",startGame);
+function drawWater(t){const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,"#1a5a86");g.addColorStop(1,"#071e33");ctx.fillStyle=g;ctx.fillRect(0,0,W,H);weeds.forEach((w,i)=>{ctx.strokeStyle=i%2?"rgba(40,140,110,.35)":"rgba(30,120,90,.28)";ctx.lineWidth=w.w*.25;ctx.beginPath();ctx.moveTo(w.x,H+4);const s=Math.sin(t*1.4+w.phase)*16;ctx.quadraticCurveTo(w.x+s,H-w.h*.5,w.x+s*.4,H-w.h);ctx.stroke()});bubbles.forEach(b=>{b.y-=b.s*.016;if(b.y<-10){b.y=H+10;b.x=Math.random()*W}ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.strokeStyle=`rgba(200,240,255,${b.a})`;ctx.stroke()})}
+function gameLoop(ts){if(!lastTs)lastTs=ts;let dt=Math.min(.033,(ts-lastTs)/1000);lastTs=ts;const t=ts/1000;if(shake>0)shake*=.86;ctx.save();if(shake>.4)ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);drawWater(t);if(state==="play"){elapsed+=dt*1000;spawnEvery=Math.max(380,1100-elapsed/95);spawnAcc+=dt*1000;while(spawnAcc>=spawnEvery){spawnAcc-=spawnEvery;spawnFish()}if(performance.now()-lastCatch>1400)combo=0;for(let i=fishList.length-1;i>=0;i--){const f=fishList[i];f.update(dt);if(f.y>H+f.size){fishList.splice(i,1);lives-=1;combo=0;updateHud();if(lives<=0)gameOver()}}}else if(state==="menu"){if(fishList.length<5&&Math.random()<.03)spawnFish();fishList.forEach(f=>f.update(dt*.55));fishList=fishList.filter(f=>f.y<H+f.size)}fishList.forEach(f=>f.draw());for(let i=fx.length-1;i>=0;i--){const p=fx[i];p.life-=dt*1.6;if(p.kind==="p"){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=180*dt}else if(p.kind==="t")p.y+=p.vy*dt;else if(p.kind==="r")p.r+=90*dt;if(p.life<=0)fx.splice(i,1)}fx.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life);if(p.kind==="p"){ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill()}else if(p.kind==="t"){ctx.fillStyle=p.color;ctx.font="bold 20px Trebuchet MS";ctx.textAlign="center";ctx.fillText(p.text,p.x,p.y)}else{ctx.strokeStyle="rgba(200,235,255,.6)";ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.stroke()}ctx.globalAlpha=1});ctx.restore();requestAnimationFrame(gameLoop)}
+(function(){const hs=Number(localStorage.getItem(HS_KEY)||0);if(hs)ovStats.innerHTML="Best haul <strong>"+hs+"</strong>";updateHud();requestAnimationFrame(gameLoop)})();
+</script>
+</body>
+</html>
