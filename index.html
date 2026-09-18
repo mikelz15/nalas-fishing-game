@@ -20,12 +20,13 @@ canvas{display:block;width:100vw;height:100vh}
 #card{max-width:420px;width:92vw;background:rgba(8,28,48,.78);border:1px solid rgba(180,230,255,.28);border-radius:24px;padding:28px 22px}
 #nalaTitleImg{width:108px;height:108px;border-radius:50%;object-fit:cover;margin:0 auto 10px;display:block}
 button{pointer-events:auto;border:0;background:linear-gradient(180deg,#ffd56a,#f0a52a);color:#2a1a00;font-weight:800;font-size:18px;padding:14px 28px;border-radius:999px}
+a.pack{pointer-events:auto;display:inline-block;margin-top:14px;color:#ffe28a;text-decoration:none;font-size:14px}
 </style>
 </head>
 <body>
 <canvas id="gameCanvas"></canvas>
 <div id="hud"><div id="topbar"><div id="scoreBox"><span>SCORE </span><strong id="scoreVal">0</strong></div><div id="lives"></div></div><div id="combo">COMBO x1</div></div>
-<div id="overlay"><div id="card"><img id="nalaTitleImg" alt="Nala" src=""><h1 id="ovTitle">Nala's Fishing Game</h1><p id="ovSub">Tap the swimming Nala-fish before they slip off the screen.</p><div id="ovStats"></div><button id="startBtn">Cast the line</button></div></div>
+<div id="overlay"><div id="card"><img id="nalaTitleImg" alt="Nala" src=""><h1 id="ovTitle">Nala's Fishing Game</h1><p id="ovSub">Tap the swimming Nala-fish before they slip off the screen.</p><div id="ovStats"></div><button id="startBtn">Cast the line</button><p><a class="pack" href="pack.html">I See You — The Pack</a></p></div></div>
 <script>
 const NALA_SRC="https://raw.githubusercontent.com/mikelz15/nalas-fishing-game/98eb385837db582b26a84305f78881d0593008cd/nala-face.png";
 const canvas=document.getElementById("gameCanvas");
